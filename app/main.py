@@ -3,7 +3,6 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-# Create FastAPI application instance
 app = FastAPI(
     title="FastAPI Backend Setup",
     description="A standard FastAPI boilerplate for any project",
