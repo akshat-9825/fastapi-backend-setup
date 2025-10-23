@@ -1,0 +1,161 @@
+# FastAPI Backend Setup - Cursor Rules
+
+## Database Migrations with Alembic
+
+This project uses **Alembic** for database migrations.
+
+### Quick Reference Commands
+
+```bash
+make migrate-create MSG="create users table"  # Create new migration
+make migrate-up                                # Run all pending migrations
+make migrate-down                              # Rollback one migration
+make migrate-history                           # View migration history
+```
+
+### Creating a Model & Migration Workflow
+
+1. **Create a model in `app/models/`:**
+
+   ```python
+   # app/models/user.py
+   from sqlalchemy import Column, Integer, String, Boolean
+   from app.database import Base
+
+   class User(Base):
+       __tablename__ = "users"
+
+       id = Column(Integer, primary_key=True, index=True)
+       email = Column(String, unique=True, index=True, nullable=False)
+       name = Column(String, nullable=False)
+       is_active = Column(Boolean, default=True)
+   ```
+
+2. **Import model in `alembic/env.py`:**
+
+   ```python
+   # Add near the top of alembic/env.py
+   from app.models import user
+   ```
+
+3. **Create and run migration:**
+   ```bash
+   make migrate-create MSG="create users table"
+   make migrate-up
+   ```
+
+### Database Configuration
+
+- Database URL is configured in `.env` file as `DATABASE_URL`
+- The URL is loaded via `app/config.py` settings
+- Never commit database credentials - they should only be in `.env` (git-ignored)
+
+### Migration Best Practices
+
+1. Always review auto-generated migrations before running
+2. Test migrations on dev database first
+3. Keep migrations small and focused
+4. Write clear migration messages
+5. Never edit applied migrations - create new ones to fix issues
+6. Import all models in `alembic/env.py` for autogenerate to work
+7. Models must inherit from `Base` (from `app.database`)
+
+### Common Migration Commands
+
+```bash
+# Create migration with autogenerate
+make migrate-create MSG="add email column"
+
+# Manual migration (no autogenerate)
+poetry run alembic revision -m "custom migration"
+
+# Upgrade to specific revision
+poetry run alembic upgrade abc123
+
+# Downgrade to specific revision
+poetry run alembic downgrade abc123
+
+# Rollback all migrations
+poetry run alembic downgrade base
+
+# Show current revision
+poetry run alembic current
+
+# Show pending migrations
+poetry run alembic heads
+```
+
+### Troubleshooting
+
+**Autogenerate didn't detect changes:**
+
+- Ensure model is imported in `alembic/env.py`
+- Ensure model inherits from `Base`
+- Check DATABASE_URL in `.env` is correct
+
+**"Can't locate revision":**
+
+- Pull latest migrations from git
+- Or downgrade to a known revision
+
+## Project Structure
+
+```
+fastapi-backend-setup/
+├── alembic/                    # Migration files
+│   ├── versions/               # Individual migrations
+│   └── env.py                  # Alembic config (import models here)
+├── app/
+│   ├── config.py               # Settings from .env
+│   ├── database.py             # Database connection & Base
+│   ├── main.py                 # FastAPI app
+│   └── models/                 # SQLAlchemy models
+├── .env                        # Environment vars (git-ignored)
+└── .env.example                # Template for .env
+```
+
+## Database Setup
+
+### Using get_db() Dependency
+
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+
+@app.get("/users")
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return users
+```
+
+### Configuration in .env
+
+```env
+DATABASE_URL=postgresql://localhost:5432/database_name
+DATABASE_ECHO=False  # Set to True to see SQL queries
+```
+
+## Code Quality
+
+### Ruff Commands
+
+```bash
+make lint      # Check code
+make format    # Auto-fix and format
+make check     # Check without changes
+```
+
+### Development Commands
+
+```bash
+make dev       # Run with auto-reload
+make help      # Show all commands
+```
+
+## Important Notes
+
+- This project uses **sync SQLAlchemy** (not async) for simplicity
+- Virtual environment is in `.venv/` folder (Poetry manages it)
+- All sensitive config goes in `.env` (never commit it)
+- Database URL must be set in `.env` (no default in code)
