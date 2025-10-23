@@ -1,6 +1,5 @@
 ---
-description: migration
-alwaysApply: false
+alwaysApply: true
 ---
 
 # FastAPI Backend Setup - Cursor Rules
