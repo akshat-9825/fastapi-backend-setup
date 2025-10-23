@@ -4,14 +4,14 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from sqlalchemy.orm import Session
 from sqlalchemy.sql import text
 
 from app.common.endpoints.api_router import api_router
 from app.common.models.response import BaseResponseModel
+from app.common.modules.db_module import DB
 from app.config import settings
-from app.database import get_db
 from app.exceptions.handlers import exception_handler
+from app.module import get_instance
 
 app = FastAPI(
     title="FastAPI Backend Setup",
@@ -40,6 +40,11 @@ async def global_exception_handler(request: Request, exception: Exception):
 app.include_router(api_router, prefix="/api")
 
 
+def get_db_service() -> DB:
+    """Get DB service from DI container."""
+    return get_instance(DB)
+
+
 @app.get("/", response_model=BaseResponseModel)
 def root():
     """Root endpoint"""
@@ -65,19 +70,21 @@ def health_check():
 
 
 @app.get("/db/check", response_model=BaseResponseModel)
-def check_database(db: Session = Depends(get_db)):
+def check_database(db: DB = Depends(get_db_service)):
     """
     Check database connection.
     Simple endpoint to verify database is accessible.
+    Uses DI container and context manager (explicit commit pattern).
     """
     try:
-        result = db.execute(text("SELECT 1")).scalar()
-        logger.info("Database connection successful")
-        return BaseResponseModel(
-            status="connected",
-            message="Database connection successful",
-            data={"test_query_result": result},
-        )
+        with db.session() as session:
+            result = session.execute(text("SELECT 1")).scalar()
+            logger.info("Database connection successful")
+            return BaseResponseModel(
+                status="connected",
+                message="Database connection successful",
+                data={"test_query_result": result},
+            )
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
         raise e

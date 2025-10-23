@@ -407,3 +407,733 @@ make help      # Show all commands
 - We use "entities" instead of "models" for database tables
 - **Use loguru for logging, never use print statements in production code**
 - Exception handlers use decorators (`@app.exception_handler()`) for cleaner code
+
+---
+
+# Clean Architecture Pattern
+
+This project follows **Clean Architecture** (also known as **Hexagonal Architecture** or **Onion Architecture**) with **Dependency Injection**.
+
+## Why This Architecture?
+
+### Advantages
+
+1. **Separation of Concerns**
+
+   - Business logic is isolated from infrastructure
+   - Each layer has a single responsibility
+   - Changes in one layer don't affect others
+
+2. **Testability**
+
+   - Business logic can be tested without database
+   - Mock dependencies easily with DI
+   - Each layer can be unit tested independently
+
+3. **Maintainability**
+
+   - Clear structure makes code easy to navigate
+   - Changes are localized to specific layers
+   - New developers can understand the system quickly
+
+4. **Flexibility**
+
+   - Easy to switch databases (just change repository implementation)
+   - Easy to swap external services (just change provider)
+   - Business rules independent of frameworks
+
+5. **Scalability**
+
+   - Features are self-contained modules
+   - Teams can work on different features independently
+   - Easy to add new features without affecting existing ones
+
+6. **Domain-Driven Design (DDD)**
+   - Business concepts are first-class citizens
+   - Domain models reflect real business needs
+   - Reduces translation between business and code
+
+### Common Problems This Solves
+
+- ❌ **Spaghetti code**: Controllers talking directly to database
+- ❌ **Tight coupling**: Business logic mixed with HTTP/DB concerns
+- ❌ **Hard to test**: Can't test without spinning up database
+- ❌ **Vendor lock-in**: Switching databases requires rewriting everything
+- ❌ **Code duplication**: Same logic repeated in multiple controllers
+
+## Feature Structure
+
+Each feature follows this layered architecture:
+
+```
+app/features/users/
+├── domain/                      # Core business logic (innermost layer)
+│   ├── entities/                # Database models (ORM)
+│   │   └── user_entity.py
+│   └── repository/              # Data access interfaces + implementations
+│       ├── user_repository.py              # Abstract interface
+│       └── user_repository_handler.py      # Concrete implementation
+│
+├── application/                 # Use cases and business rules
+│   ├── models/                  # DTOs (Request/Response models)
+│   │   ├── user_create_model.py
+│   │   ├── user_update_model.py
+│   │   └── user_response_model.py
+│   └── services/                # Business logic services
+│       ├── user_service.py                 # Abstract interface
+│       ├── user_service_handler.py         # Concrete implementation
+│       ├── user_create_service.py          # Abstract interface
+│       └── user_create_service_handler.py  # Concrete implementation
+│
+├── endpoints/                   # Presentation layer (outermost layer)
+│   └── user_controller.py       # HTTP endpoints
+│
+└── modules/                     # Dependency Injection
+    └── module.py                # DI configuration for this feature
+```
+
+## Layer Responsibilities
+
+### 1. Domain Layer (Innermost)
+
+**Contains:** Entities, Repository interfaces
+
+**Rules:**
+
+- No dependencies on outer layers
+- Pure business objects
+- Database models (SQLAlchemy entities)
+- Repository interfaces (abstract classes)
+
+**Example:**
+
+```python
+# app/features/users/domain/entities/user_entity.py
+from sqlalchemy import Column, Integer, String, Boolean
+from app.database import Base
+
+class UserEntity(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+```
+
+```python
+# app/features/users/domain/repository/user_repository.py
+from abc import ABC, abstractmethod
+from app.features.users.domain.entities.user_entity import UserEntity
+
+class UserRepository(ABC):
+    """Abstract repository interface - defines WHAT operations are available."""
+
+    @abstractmethod
+    def get_by_id(self, user_id: int) -> UserEntity | None:
+        pass
+
+    @abstractmethod
+    def get_all(self) -> list[UserEntity]:
+        pass
+
+    @abstractmethod
+    def create(self, user: UserEntity) -> UserEntity:
+        pass
+```
+
+```python
+# app/features/users/domain/repository/user_repository_handler.py
+from app.common.modules.db_module import DB
+from app.features.users.domain.entities.user_entity import UserEntity
+from app.features.users.domain.repository.user_repository import UserRepository
+
+class UserRepositoryHandler(UserRepository):
+    """Concrete repository implementation - defines HOW to do it."""
+
+    db: DB  # Injector will set this automatically
+
+    def get_by_id(self, user_id: int) -> UserEntity | None:
+        db = self.db
+        with db.session() as session:
+            return session.query(UserEntity).filter(UserEntity.id == user_id).first()
+
+    def get_all(self) -> list[UserEntity]:
+        db = self.db
+        with db.session() as session:
+            return session.query(UserEntity).all()
+
+    def create(self, user: UserEntity) -> UserEntity:
+        db = self.db
+        try:
+            with db.session() as session:
+                session.add(user)
+                session.commit()  # Explicit commit
+                session.refresh(user)
+                logger.info(f"User created: {user.id}")
+                return user
+        except IntegrityError as e:
+            logger.error(f"Duplicate user error: {str(e)}")
+            raise  # Or raise custom exception
+```
+
+### 2. Application Layer (Middle)
+
+**Contains:** Services, DTOs (Data Transfer Objects)
+
+**Rules:**
+
+- Business logic and use cases
+- Orchestrates domain objects
+- Can depend on domain layer
+- Returns DTOs, not entities
+
+**Example:**
+
+```python
+# app/features/users/application/models/user_response_model.py
+from pydantic import BaseModel
+
+class UserResponseModel(BaseModel):
+    id: int
+    email: str
+    name: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True  # Allows creation from ORM models
+```
+
+```python
+# app/features/users/application/services/user_service.py
+from abc import ABC, abstractmethod
+from app.features.users.application.models.user_response_model import UserResponseModel
+
+class UserService(ABC):
+    """Abstract service interface - defines business operations."""
+
+    @abstractmethod
+    def get_user(self, user_id: int) -> UserResponseModel | None:
+        pass
+
+    @abstractmethod
+    def get_all_users(self) -> list[UserResponseModel]:
+        pass
+```
+
+```python
+# app/features/users/application/services/user_service_handler.py
+from app.features.users.application.models.user_response_model import UserResponseModel
+from app.features.users.application.services.user_service import UserService
+from app.features.users.domain.repository.user_repository import UserRepository
+
+class UserServiceHandler(UserService):
+    """Concrete service implementation - implements business logic."""
+
+    repository: UserRepository  # Injector will set this automatically
+
+    def get_user(self, user_id: int) -> UserResponseModel | None:
+        entity = self.repository.get_by_id(user_id)
+        if not entity:
+            return None
+        return UserResponseModel.model_validate(entity)
+
+    def get_all_users(self) -> list[UserResponseModel]:
+        entities = self.repository.get_all()
+        return [UserResponseModel.model_validate(e) for e in entities]
+```
+
+### 3. Presentation Layer (Outermost)
+
+**Contains:** Controllers/Endpoints
+
+**Rules:**
+
+- HTTP request/response handling
+- Calls services to perform operations
+- Returns HTTP responses
+- No business logic
+
+**Example:**
+
+```python
+# app/features/users/endpoints/user_controller.py
+from fastapi import APIRouter, Depends
+from loguru import logger
+
+from app.common.models.response import BaseResponseModel
+from app.features.users.application.services.user_service import UserService
+from app.module import get_instance
+
+router = APIRouter()
+
+def get_user_service() -> UserService:
+    """Dependency injection - get service from DI container."""
+    return get_instance(UserService)
+
+@router.get("/", response_model=BaseResponseModel)
+def get_all_users(user_service: UserService = Depends(get_user_service)):
+    logger.info("Fetching all users")
+    users = user_service.get_all_users()
+    return BaseResponseModel(
+        status="success",
+        message="Users retrieved successfully",
+        data={"users": [u.model_dump() for u in users]}
+    )
+
+@router.get("/{user_id}", response_model=BaseResponseModel)
+def get_user(user_id: int, user_service: UserService = Depends(get_user_service)):
+    logger.info(f"Fetching user: {user_id}")
+    user = user_service.get_user(user_id)
+    if not user:
+        return BaseResponseModel(
+            status="error",
+            message="User not found",
+            data=None
+        )
+    return BaseResponseModel(
+        status="success",
+        message="User retrieved successfully",
+        data=user.model_dump()
+    )
+```
+
+### 4. Dependency Injection Module
+
+**Contains:** DI configuration for the feature
+
+**Rules:**
+
+- Wires up interfaces to implementations
+- Configures dependencies
+- Registered in root `app/module.py`
+
+**Example:**
+
+```python
+# app/features/users/modules/module.py
+from injector import Module, provider, singleton
+
+from app.common.modules.db_module import DB
+from app.features.users.application.services.user_service import UserService
+from app.features.users.application.services.user_service_handler import UserServiceHandler
+from app.features.users.domain.repository.user_repository import UserRepository
+from app.features.users.domain.repository.user_repository_handler import UserRepositoryHandler
+
+class UserModule(Module):
+    """Dependency injection configuration for user feature."""
+
+    @provider
+    @singleton
+    def provide_user_repository(self) -> UserRepository:
+        """
+        Provide UserRepository implementation.
+        Injector automatically injects DB via class attribute.
+        """
+        return UserRepositoryHandler()
+
+    @provider
+    @singleton
+    def provide_user_service(self) -> UserService:
+        """
+        Provide UserService implementation.
+        Injector automatically injects UserRepository via class attribute.
+        """
+        return UserServiceHandler()
+```
+
+```python
+# app/module.py (Root DI configuration)
+from injector import Injector
+from app.common.modules.db_module import DbModule
+from app.features.users.modules.module import UserModule
+
+injector_instance = Injector([
+    DbModule(),       # Provides database session
+    UserModule(),     # Provides user services
+])
+
+def get_instance(service_class: type):
+    """Get service instance from DI container."""
+    return injector_instance.get(service_class)
+```
+
+## Creating a New Feature - Step by Step
+
+### 1. Create Feature Structure
+
+```bash
+mkdir -p app/features/products/domain/entities
+mkdir -p app/features/products/domain/repository
+mkdir -p app/features/products/application/models
+mkdir -p app/features/products/application/services
+mkdir -p app/features/products/endpoints
+mkdir -p app/features/products/modules
+```
+
+### 2. Create Entity (Domain Layer)
+
+```python
+# app/features/products/domain/entities/product_entity.py
+from sqlalchemy import Column, Integer, String, Float
+from app.database import Base
+
+class ProductEntity(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+```
+
+### 3. Create Repository Interface + Implementation
+
+```python
+# app/features/products/domain/repository/product_repository.py
+from abc import ABC, abstractmethod
+from app.features.products.domain.entities.product_entity import ProductEntity
+
+class ProductRepository(ABC):
+    @abstractmethod
+    def get_all(self) -> list[ProductEntity]:
+        pass
+```
+
+```python
+# app/features/products/domain/repository/product_repository_handler.py
+from app.common.modules.db_module import DB
+from app.features.products.domain.entities.product_entity import ProductEntity
+from app.features.products.domain.repository.product_repository import ProductRepository
+
+class ProductRepositoryHandler(ProductRepository):
+    db: DB  # Injector will set this automatically
+
+    def get_all(self) -> list[ProductEntity]:
+        db = self.db
+        with db.session() as session:
+            return session.query(ProductEntity).all()
+```
+
+### 4. Create DTOs (Application Layer)
+
+```python
+# app/features/products/application/models/product_response_model.py
+from pydantic import BaseModel
+
+class ProductResponseModel(BaseModel):
+    id: int
+    name: str
+    price: float
+
+    class Config:
+        from_attributes = True
+```
+
+### 5. Create Service Interface + Implementation
+
+```python
+# app/features/products/application/services/product_service.py
+from abc import ABC, abstractmethod
+from app.features.products.application.models.product_response_model import ProductResponseModel
+
+class ProductService(ABC):
+    @abstractmethod
+    def get_all_products(self) -> list[ProductResponseModel]:
+        pass
+```
+
+```python
+# app/features/products/application/services/product_service_handler.py
+from app.features.products.application.models.product_response_model import ProductResponseModel
+from app.features.products.application.services.product_service import ProductService
+from app.features.products.domain.repository.product_repository import ProductRepository
+
+class ProductServiceHandler(ProductService):
+    repository: ProductRepository  # Injector will set this automatically
+
+    def get_all_products(self) -> list[ProductResponseModel]:
+        entities = self.repository.get_all()
+        return [ProductResponseModel.model_validate(e) for e in entities]
+```
+
+### 6. Create Controller (Presentation Layer)
+
+```python
+# app/features/products/endpoints/product_controller.py
+from fastapi import APIRouter, Depends
+from app.common.models.response import BaseResponseModel
+from app.features.products.application.services.product_service import ProductService
+from app.module import get_instance
+
+router = APIRouter()
+
+def get_product_service() -> ProductService:
+    return get_instance(ProductService)
+
+@router.get("/", response_model=BaseResponseModel)
+def get_products(service: ProductService = Depends(get_product_service)):
+    products = service.get_all_products()
+    return BaseResponseModel(
+        status="success",
+        message="Products retrieved",
+        data={"products": [p.model_dump() for p in products]}
+    )
+```
+
+### 7. Create DI Module
+
+```python
+# app/features/products/modules/module.py
+from injector import Module, provider, singleton
+
+from app.common.modules.db_module import DB
+from app.features.products.application.services.product_service import ProductService
+from app.features.products.application.services.product_service_handler import ProductServiceHandler
+from app.features.products.domain.repository.product_repository import ProductRepository
+from app.features.products.domain.repository.product_repository_handler import ProductRepositoryHandler
+
+class ProductModule(Module):
+    @provider
+    @singleton
+    def provide_product_repository(self) -> ProductRepository:
+        """Injector automatically injects DB via class attribute."""
+        return ProductRepositoryHandler()
+
+    @provider
+    @singleton
+    def provide_product_service(self) -> ProductService:
+        """Injector automatically injects ProductRepository via class attribute."""
+        return ProductServiceHandler()
+```
+
+### 8. Register Module in Root
+
+```python
+# app/module.py
+from app.features.products.modules.module import ProductModule
+
+injector_instance = Injector([
+    DbModule(),
+    UserModule(),
+    ProductModule(),  # Add here
+])
+```
+
+### 9. Register Router
+
+```python
+# app/common/endpoints/api_router.py
+from app.features.products.endpoints import product_controller
+
+api_router.include_router(
+    product_controller.router,
+    prefix="/products",
+    tags=["products"]
+)
+```
+
+### 10. Create Migration
+
+```bash
+make migrate-create MSG="create products table"
+# Edit the migration file
+make migrate-up
+```
+
+## Best Practices
+
+### Naming Conventions
+
+- **Entities**: `{Name}Entity` (e.g., `UserEntity`, `ProductEntity`)
+- **Repositories**: `{Name}Repository` (interface), `{Name}RepositoryHandler` (implementation)
+- **Services**: `{Name}Service` (interface), `{Name}ServiceHandler` (implementation)
+- **DTOs**: `{Name}{Action}Model` (e.g., `UserCreateModel`, `UserResponseModel`)
+- **Controllers**: `{name}_controller` (e.g., `user_controller.py`)
+- **Modules**: `module.py` or `{feature}_module.py`
+
+### Dependency Direction
+
+```
+Presentation → Application → Domain
+(Controllers) → (Services)  → (Entities/Repositories)
+```
+
+**Rules:**
+
+- Outer layers depend on inner layers
+- Inner layers NEVER depend on outer layers
+- Dependencies point INWARD
+
+### Abstract vs Concrete
+
+- **Abstract** (interface): Defines WHAT operations are available
+- **Concrete** (handler): Defines HOW to implement them
+- Controllers depend on interfaces, not implementations
+- DI container wires interfaces to implementations
+
+### Dependency Injection Pattern (IMPORTANT!)
+
+**Use class attributes, NOT constructors** for dependency injection with FastAPI:
+
+❌ **Wrong (Constructor Injection):**
+
+```python
+class UserServiceHandler(UserService):
+    def __init__(self, repository: UserRepository):
+        self.repository = repository  # DON'T do this with injector
+```
+
+✅ **Correct (Class Attribute Injection):**
+
+```python
+class UserServiceHandler(UserService):
+    repository: UserRepository  # Injector sets this automatically
+```
+
+**Why?** The `injector` library works better with FastAPI when using class attributes. It automatically injects dependencies based on type hints.
+
+### Module Registration Scalability
+
+**Concern:** "Won't registering all features in one file get messy?"
+
+**Answer:** Yes! Here's how to handle it:
+
+**For Small Projects (< 10 features):**
+
+```python
+# app/module.py
+from app.features.users.modules.module import UserModule
+from app.features.products.modules.module import ProductModule
+
+FEATURE_MODULES = [
+    DbModule(),
+    UserModule(),
+    ProductModule(),
+]
+```
+
+**For Large Projects (> 10 features):**
+
+Option 1: **Group by domain**
+
+```python
+# app/features/auth/modules/__init__.py
+from app.features.auth.modules.user_module import UserModule
+from app.features.auth.modules.role_module import RoleModule
+
+AUTH_MODULES = [UserModule(), RoleModule()]
+```
+
+```python
+# app/module.py
+from app.features.auth.modules import AUTH_MODULES
+from app.features.billing.modules import BILLING_MODULES
+from app.features.inventory.modules import INVENTORY_MODULES
+
+FEATURE_MODULES = [
+    DbModule(),
+    *AUTH_MODULES,
+    *BILLING_MODULES,
+    *INVENTORY_MODULES,
+]
+```
+
+Option 2: **Auto-discovery (advanced)**
+
+```python
+# app/common/utils/module_loader.py
+import importlib
+import pkgutil
+from pathlib import Path
+
+def discover_feature_modules():
+    """Automatically discover and import all feature modules."""
+    features_path = Path(__file__).parent.parent.parent / "features"
+    modules = []
+
+    for feature_dir in features_path.iterdir():
+        if feature_dir.is_dir():
+            try:
+                module_path = f"app.features.{feature_dir.name}.modules.module"
+                module = importlib.import_module(module_path)
+                # Assume each feature exports a get_module() function
+                if hasattr(module, 'get_module'):
+                    modules.append(module.get_module())
+            except ImportError:
+                continue
+
+    return modules
+```
+
+```python
+# app/module.py
+from app.common.utils.module_loader import discover_feature_modules
+
+FEATURE_MODULES = [
+    DbModule(),
+    *discover_feature_modules(),  # Auto-discovers all features
+]
+```
+
+**Best Practice:** Start simple, refactor when you have > 10 features.
+
+### When to Split Services
+
+Split into multiple services when:
+
+- Create/Update/Delete have complex logic
+- Different services have different dependencies
+- Service is getting too large (> 300 lines)
+
+Example:
+
+```
+services/
+├── user_service.py                    # Read operations
+├── user_service_handler.py
+├── user_create_service.py             # Create operations
+├── user_create_service_handler.py
+├── user_update_service.py             # Update operations
+└── user_update_service_handler.py
+```
+
+## Testing Strategy
+
+### Unit Tests
+
+```python
+# Test services with mock repositories
+def test_get_user():
+    mock_repo = Mock(spec=UserRepository)
+    mock_repo.get_by_id.return_value = UserEntity(id=1, email="test@example.com")
+
+    service = UserServiceHandler(repository=mock_repo)
+    result = service.get_user(1)
+
+    assert result.email == "test@example.com"
+    mock_repo.get_by_id.assert_called_once_with(1)
+```
+
+### Integration Tests
+
+```python
+# Test with real database (use test database)
+def test_create_user_integration():
+    repo = UserRepositoryHandler(session_factory=TestSessionLocal)
+    service = UserServiceHandler(repository=repo)
+
+    user = service.create_user(UserCreateModel(email="test@example.com", name="Test"))
+
+    assert user.id is not None
+    assert user.email == "test@example.com"
+```
+
+## Summary
+
+This architecture provides:
+
+✅ **Clear separation** between business logic, data access, and presentation
+✅ **Testability** through dependency injection and interfaces
+✅ **Flexibility** to swap implementations without changing business logic
+✅ **Scalability** through modular, self-contained features
+✅ **Maintainability** with clear structure and single responsibility

@@ -16,6 +16,7 @@ sqlalchemy = "^2.0.44"
 alembic = "^1.17.0"
 psycopg2-binary = "^2.9.11"
 loguru = "^0.7.3"
+injector = "^0.22.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.14.1"
