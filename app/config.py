@@ -15,10 +15,14 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Database Settings
+    database_url: str  # No default - must be set in .env
+    database_echo: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = False
 
 
 # Create settings instance
-settings = Settings()
+settings = Settings()  # type: ignore
