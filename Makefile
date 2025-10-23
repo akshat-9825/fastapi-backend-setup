@@ -1,4 +1,4 @@
-.PHONY: help install run dev test clean add remove shell env-info lint format check migrate-create migrate-up migrate-down migrate-history
+.PHONY: help install run dev test clean add remove shell env-info lint format check migrate-create migrate-up migrate-down migrate-history migrate-status
 
 # Default target
 help:
@@ -17,7 +17,8 @@ help:
 	@echo "make migrate-create MSG=message - Create new migration"
 	@echo "make migrate-up   - Run all pending migrations"
 	@echo "make migrate-down - Downgrade by one migration"
-	@echo "make migrate-history - Show migration history"
+	@echo "make migrate-status - Show current and pending migrations"
+	@echo "make migrate-history - Show full migration history"
 	@echo "make clean        - Remove cache and temporary files"
 	@echo "make test         - Run tests (when test suite is added)"
 
@@ -102,10 +103,21 @@ migrate-down:
 	@echo "Downgrading last migration..."
 	poetry run alembic downgrade -1
 
-# Show migration history
+# Show migration status (current and pending)
+migrate-status:
+	@echo "Migration Status:"
+	@echo "================"
+	@echo ""
+	@echo "Current migration:"
+	@poetry run alembic current || echo "  (none - database not initialized)"
+	@echo ""
+	@echo "All migrations (✓ = applied):"
+	@poetry run alembic history --indicate-current
+
+# Show migration history (verbose)
 migrate-history:
-	@echo "Migration History:"
-	@echo "=================="
+	@echo "Migration History (Verbose):"
+	@echo "============================"
 	poetry run alembic history --verbose
 
 # Clean cache and temporary files
