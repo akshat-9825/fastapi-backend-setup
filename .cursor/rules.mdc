@@ -284,16 +284,80 @@ fastapi-backend-setup/
 │   ├── database.py             # Database connection & Base
 │   ├── main.py                 # FastAPI app entry point
 │   ├── common/
+│   │   ├── endpoints/
+│   │   │   └── api_router.py  # API router aggregator
 │   │   └── models/
-│   │       └── response.py     # BaseResponseModel
+│   │       └── response.py    # BaseResponseModel
 │   ├── exceptions/
-│   │   └── handlers.py         # Exception handler logic
-│   └── entities/               # SQLAlchemy entities (database tables)
-├── .env                        # Environment vars (git-ignored)
-└── .env.example                # Template for .env
+│   │   └── handlers.py        # Exception handler logic
+│   ├── entities/              # SQLAlchemy entities (database tables)
+│   └── features/              # Feature modules (add as needed)
+│       └── your_feature/      # Create feature folders here
+│           └── endpoints/
+│               └── controller.py
+├── .env                       # Environment vars (git-ignored)
+└── .env.example               # Template for .env
 ```
 
 **Note:** We use direct imports (e.g., `from app.exceptions.handlers import exception_handler`) instead of `__init__.py` re-exports to keep things simple.
+
+## API Router Pattern
+
+### How to Add a Feature
+
+All feature endpoints go in `app/features/` and are registered in `app/common/endpoints/api_router.py`.
+
+**Steps:**
+
+1. **Create feature structure:**
+
+   ```bash
+   app/features/users/
+   └── endpoints/
+       └── user_controller.py
+   ```
+
+2. **Create router with endpoints:**
+
+   ```python
+   # app/features/users/endpoints/user_controller.py
+   from fastapi import APIRouter, Depends
+   from sqlalchemy.orm import Session
+   from app.database import get_db
+   from app.common.models.response import BaseResponseModel
+
+   router = APIRouter()
+
+   @router.get("/", response_model=BaseResponseModel)
+   def get_users(db: Session = Depends(get_db)):
+       return BaseResponseModel(
+           status="success",
+           message="Users retrieved",
+           data={"users": []}
+       )
+   ```
+
+3. **Register in api_router.py:**
+
+   ```python
+   # app/common/endpoints/api_router.py
+   from app.features.users.endpoints import user_controller
+
+   api_router.include_router(
+       user_controller.router,
+       prefix="/users",
+       tags=["users"]
+   )
+   ```
+
+**Result:** Endpoints available at `/api/v1/users/` and grouped in Swagger docs.
+
+### Benefits
+
+- ✅ Organized by domain (each feature is self-contained)
+- ✅ Single registration point (`api_router.py`)
+- ✅ Consistent URL structure (all under `/api/v1`)
+- ✅ Auto-documented in Swagger with tags
 
 ## Database Setup
 

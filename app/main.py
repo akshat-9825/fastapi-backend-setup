@@ -7,6 +7,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text
 
+from app.common.endpoints.api_router import api_router
 from app.common.models.response import BaseResponseModel
 from app.config import settings
 from app.database import get_db
@@ -34,6 +35,9 @@ app.add_middleware(
 async def global_exception_handler(request: Request, exception: Exception):
     """Wrapper to handle all exceptions using the universal exception_handler."""
     return exception_handler(request, exception)
+
+
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/", response_model=BaseResponseModel)
