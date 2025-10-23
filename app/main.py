@@ -1,11 +1,16 @@
 """FastAPI Application Entry Point"""
 
-from fastapi import Depends, FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text
 
+from app.common.models.response import BaseResponseModel
+from app.config import settings
 from app.database import get_db
+from app.exceptions.handlers import exception_handler
 
 app = FastAPI(
     title="FastAPI Backend Setup",
@@ -13,42 +18,62 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# CORS Middleware - Configure via settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_credentials,
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
+)
 
-@app.get("/")
+
+# Register exception handlers using decorators
+@app.exception_handler(Exception)
+@app.exception_handler(RequestValidationError)
+async def global_exception_handler(request: Request, exception: Exception):
+    """Wrapper to handle all exceptions using the universal exception_handler."""
+    return exception_handler(request, exception)
+
+
+@app.get("/", response_model=BaseResponseModel)
 def root():
     """Root endpoint"""
-    return {"message": "Welcome to FastAPI Backend Setup"}
+    logger.info("Root endpoint accessed")
+    return BaseResponseModel(
+        status="success",
+        message="Welcome to FastAPI Backend Setup",
+        data={"version": "1.0.0"},
+    )
 
 
-@app.get("/health")
+@app.get("/health", response_model=BaseResponseModel)
 def health_check():
     """Health check endpoint"""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "healthy",
+    return BaseResponseModel(
+        status="healthy",
+        message="Service is running",
+        data={
             "service": "fastapi-backend-setup",
             "version": "1.0.0",
         },
     )
 
 
-@app.get("/db/check")
+@app.get("/db/check", response_model=BaseResponseModel)
 def check_database(db: Session = Depends(get_db)):
     """
     Check database connection.
     Simple endpoint to verify database is accessible.
     """
     try:
-        # Test database connection
         result = db.execute(text("SELECT 1")).scalar()
-        return {
-            "status": "connected",
-            "message": "Database connection successful",
-            "test_query_result": result,
-        }
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)},
+        logger.info("Database connection successful")
+        return BaseResponseModel(
+            status="connected",
+            message="Database connection successful",
+            data={"test_query_result": result},
         )
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        raise e

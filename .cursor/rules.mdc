@@ -4,6 +4,175 @@ alwaysApply: true
 
 # FastAPI Backend Setup - Cursor Rules
 
+## Exception Handling
+
+### Structure
+
+Exception handlers are organized in `app/exceptions/`:
+
+```
+app/
+├── exceptions/
+│   └── handlers.py      # Single universal handler
+└── main.py              # Registers handler
+```
+
+**Handler implementation** (`app/exceptions/handlers.py`):
+
+```python
+from loguru import logger
+from fastapi import Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+def exception_handler(request: Request, exception: Exception) -> JSONResponse:
+    """Universal handler for all exceptions using isinstance() checks."""
+
+    # Validation errors
+    if isinstance(exception, RequestValidationError):
+        status_code = status.HTTP_400_BAD_REQUEST
+        logger.warning(f"Validation error: {exception.errors()}")
+        return JSONResponse(...)
+
+    # Value errors (bad input)
+    elif isinstance(exception, ValueError):
+        status_code = status.HTTP_400_BAD_REQUEST
+        logger.warning(f"ValueError: {str(exception)}")
+        return JSONResponse(...)
+
+    # Unexpected errors
+    else:
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        logger.error(f"Unhandled exception", exc_info=True)
+        return JSONResponse(...)
+```
+
+**Registration** (`app/main.py`):
+
+```python
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
+from app.exceptions.handlers import exception_handler  # Direct import
+
+app = FastAPI(...)
+
+# Register exception handlers using stacked decorators with async wrapper
+@app.exception_handler(Exception)
+@app.exception_handler(RequestValidationError)
+async def global_exception_handler(request: Request, exception: Exception):
+    """Wrapper to handle all exceptions using the universal exception_handler."""
+    return exception_handler(request, exception)
+```
+
+This approach:
+
+- ✅ **Single handler** for all exceptions (cleaner than multiple handlers)
+- ✅ Uses decorators for explicit registration (more visible than `add_exception_handler`)
+- ✅ Async wrapper allows FastAPI to handle it properly
+- ✅ Actual logic in separate `exception_handler` function (testable)
+- ✅ Uses `isinstance()` to differentiate exception types
+- ✅ Easy to extend with custom exception types
+- ✅ Consistent error response format using `BaseResponseModel`
+
+## Logging with Loguru
+
+### Why Logging Libraries > Print Statements
+
+**Print statements are BAD for production code:**
+
+1. **No Levels**: Can't distinguish between debug, info, warning, error, critical
+2. **No Filtering**: Can't turn on/off specific logs without changing code
+3. **Goes to stdout**: Hard to capture, redirect, or send to monitoring systems
+4. **No Context**: No timestamps, file names, line numbers, function names
+5. **No Rotation**: Logs grow forever, no automatic file size management
+6. **Not Async Safe**: Can cause issues in concurrent environments
+7. **No Structured Data**: Can't easily parse or analyze logs
+8. **Not Production Ready**: Can't send to Sentry, DataDog, CloudWatch, etc.
+
+**Loguru Benefits:**
+
+```python
+from loguru import logger
+
+# Automatic context
+logger.info("User logged in")  # 2025-10-23 10:30:45 | INFO | app.main:45 - User logged in
+
+# Log levels
+logger.debug("Debug info")      # Only in dev
+logger.info("Normal flow")       # General info
+logger.warning("Be careful")     # Potential issues
+logger.error("Something broke")  # Errors that were handled
+logger.critical("ALERT!")        # System-breaking errors
+
+# Exception tracking with full traceback
+try:
+    risky_operation()
+except Exception as e:
+    logger.exception("Operation failed")  # Includes full traceback
+
+# Structured logging
+logger.info("User action", user_id=123, action="purchase", amount=99.99)
+
+# Easy configuration
+logger.add("logs/app.log", rotation="500 MB", retention="10 days", level="INFO")
+logger.add("logs/errors.log", level="ERROR", backtrace=True, diagnose=True)
+```
+
+**Real-world scenario:**
+
+```python
+# ❌ BAD: Using print
+def create_user(email: str):
+    print(f"Creating user: {email}")  # Where does this go in production?
+    if not email:
+        print("ERROR: Email is required")  # Can't filter or alert on this
+    user = db.save(User(email=email))
+    print(f"User created: {user.id}")  # Lost forever when server restarts
+
+# ✅ GOOD: Using logger
+def create_user(email: str):
+    logger.info("Creating user", email=email)  # Searchable, timestamped, contextual
+    if not email:
+        logger.error("Email validation failed")  # Can trigger alerts
+    user = db.save(User(email=email))
+    logger.info("User created successfully", user_id=user.id)  # Trackable
+```
+
+### When Prints Are OK
+
+- **Temporary debugging** during active development (remove before commit)
+- **CLI scripts** that need human-readable output
+- **Setup scripts** or configuration utilities
+
+### Best Practices
+
+1. **Always log in exception handlers** - helps debug production issues
+2. **Log at entry/exit of critical functions** - trace request flow
+3. **Use appropriate levels** - don't log everything as INFO
+4. **Add context** - user_id, request_id, correlation_id
+5. **Never log sensitive data** - passwords, tokens, credit cards
+6. **Use structured logging** - easier to parse and analyze
+
+```python
+# Good logging example
+@app.post("/api/users")
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    logger.info("Creating user", email=user.email)
+
+    try:
+        db_user = User(**user.dict())
+        db.add(db_user)
+        db.commit()
+        logger.info("User created successfully", user_id=db_user.id)
+        return db_user
+    except IntegrityError:
+        logger.warning("User already exists", email=user.email)
+        raise HTTPException(status_code=400, detail="User already exists")
+    except Exception as e:
+        logger.error("Failed to create user", email=user.email, error=str(e))
+        raise
+```
+
 ## Database Migrations with Alembic
 
 This project uses **Alembic** for database migrations.
@@ -110,13 +279,21 @@ fastapi-backend-setup/
 │   ├── versions/               # Individual migrations
 │   └── env.py                  # Alembic config (import entities here)
 ├── app/
+│   ├── __init__.py             # Makes app a package (required)
 │   ├── config.py               # Settings from .env
 │   ├── database.py             # Database connection & Base
-│   ├── main.py                 # FastAPI app
-│   └── entities/               # SQLAlchemy entities
+│   ├── main.py                 # FastAPI app entry point
+│   ├── common/
+│   │   └── models/
+│   │       └── response.py     # BaseResponseModel
+│   ├── exceptions/
+│   │   └── handlers.py         # Exception handler logic
+│   └── entities/               # SQLAlchemy entities (database tables)
 ├── .env                        # Environment vars (git-ignored)
 └── .env.example                # Template for .env
 ```
+
+**Note:** We use direct imports (e.g., `from app.exceptions.handlers import exception_handler`) instead of `__init__.py` re-exports to keep things simple.
 
 ## Database Setup
 
@@ -164,166 +341,5 @@ make help      # Show all commands
 - All sensitive config goes in `.env` (never commit it)
 - Database URL must be set in `.env` (no default in code)
 - We use "entities" instead of "models" for database tables
-
-# FastAPI Backend Setup - Cursor Rules
-
-## Database Migrations with Alembic
-
-This project uses **Alembic** for database migrations.
-
-### Quick Reference Commands
-
-```bash
-make migrate-create MSG="create users table"  # Create new migration
-make migrate-up                                # Run all pending migrations
-make migrate-down                              # Rollback one migration
-make migrate-history                           # View migration history
-```
-
-### Creating an Entity & Migration Workflow
-
-1. **Create an entity in `app/entities/`:**
-
-   ```python
-   # app/entities/user.py
-   from sqlalchemy import Column, Integer, String, Boolean
-   from app.database import Base
-
-   class User(Base):
-       __tablename__ = "users"
-
-       id = Column(Integer, primary_key=True, index=True)
-       email = Column(String, unique=True, index=True, nullable=False)
-       name = Column(String, nullable=False)
-       is_active = Column(Boolean, default=True)
-   ```
-
-2. **Import entity in `alembic/env.py`:**
-
-   ```python
-   # Add near the top of alembic/env.py
-   from app.entities import user
-   ```
-
-3. **Create and run migration:**
-   ```bash
-   make migrate-create MSG="create users table"
-   make migrate-up
-   ```
-
-### Database Configuration
-
-- Database URL is configured in `.env` file as `DATABASE_URL`
-- The URL is loaded via `app/config.py` settings
-- Never commit database credentials - they should only be in `.env` (git-ignored)
-
-### Migration Best Practices
-
-1. Always review auto-generated migrations before running
-2. Test migrations on dev database first
-3. Keep migrations small and focused
-4. Write clear migration messages
-5. Never edit applied migrations - create new ones to fix issues
-6. Import all entities in `alembic/env.py` for autogenerate to work
-7. Entities must inherit from `Base` (from `app.database`)
-
-### Common Migration Commands
-
-```bash
-# Create migration with autogenerate
-make migrate-create MSG="add email column"
-
-# Manual migration (no autogenerate)
-poetry run alembic revision -m "custom migration"
-
-# Upgrade to specific revision
-poetry run alembic upgrade abc123
-
-# Downgrade to specific revision
-poetry run alembic downgrade abc123
-
-# Rollback all migrations
-poetry run alembic downgrade base
-
-# Show current revision
-poetry run alembic current
-
-# Show pending migrations
-poetry run alembic heads
-```
-
-### Troubleshooting
-
-**Autogenerate didn't detect changes:**
-
-- Ensure entity is imported in `alembic/env.py`
-- Ensure entity inherits from `Base`
-- Check DATABASE_URL in `.env` is correct
-
-**"Can't locate revision":**
-
-- Pull latest migrations from git
-- Or downgrade to a known revision
-
-## Project Structure
-
-```
-fastapi-backend-setup/
-├── alembic/                    # Migration files
-│   ├── versions/               # Individual migrations
-│   └── env.py                  # Alembic config (import entities here)
-├── app/
-│   ├── config.py               # Settings from .env
-│   ├── database.py             # Database connection & Base
-│   ├── main.py                 # FastAPI app
-│   └── entities/               # SQLAlchemy entities
-├── .env                        # Environment vars (git-ignored)
-└── .env.example                # Template for .env
-```
-
-## Database Setup
-
-### Using get_db() Dependency
-
-```python
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from app.database import get_db
-
-@app.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    return users
-```
-
-### Configuration in .env
-
-```env
-DATABASE_URL=postgresql://localhost:5432/database_name
-DATABASE_ECHO=False  # Set to True to see SQL queries
-```
-
-## Code Quality
-
-### Ruff Commands
-
-```bash
-make lint      # Check code
-make format    # Auto-fix and format
-make check     # Check without changes
-```
-
-### Development Commands
-
-```bash
-make dev       # Run with auto-reload
-make help      # Show all commands
-```
-
-## Important Notes
-
-- This project uses **sync SQLAlchemy** (not async) for simplicity
-- Virtual environment is in `.venv/` folder (Poetry manages it)
-- All sensitive config goes in `.env` (never commit it)
-- Database URL must be set in `.env` (no default in code)
-- We use "entities" instead of "models" for database tables
+- **Use loguru for logging, never use print statements in production code**
+- Exception handlers use decorators (`@app.exception_handler()`) for cleaner code

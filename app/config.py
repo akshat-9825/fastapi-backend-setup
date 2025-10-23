@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     database_url: str  # No default - must be set in .env
     database_echo: bool = False
 
+    # CORS Settings
+    cors_origins: list[str] = ["*"]  # Allow all origins by default
+    cors_credentials: bool = True
+    cors_methods: list[str] = ["*"]
+    cors_headers: list[str] = ["*"]
+
     class Config:
         env_file = ".env"
         case_sensitive = False

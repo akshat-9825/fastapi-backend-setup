@@ -10,8 +10,11 @@ A production-ready FastAPI boilerplate with Poetry for dependency management.
 - 🚀 **Uvicorn** - Lightning-fast ASGI server
 - 🔧 **Configuration Management** - Environment-based configuration with pydantic-settings
 - 🎨 **Ruff** - Extremely fast Python linter and formatter (replaces Black, isort, flake8)
-- 🗄️ **SQLAlchemy + PostgreSQL** - Powerful ORM with async support
+- 🗄️ **SQLAlchemy + PostgreSQL** - Powerful ORM with PostgreSQL support
 - 🔄 **Alembic** - Database migration management
+- 📝 **Loguru** - Beautiful, easy-to-use logging (no more print statements!)
+- 🛡️ **Exception Handling** - Global error handlers with consistent API responses
+- 🌐 **CORS Middleware** - Pre-configured CORS support
 
 ## Prerequisites
 
@@ -233,6 +236,10 @@ Configuration is managed through environment variables and the `app/config.py` f
 - `PORT`: Server port (default: 8000)
 - `DATABASE_URL`: PostgreSQL connection string (required, no default)
 - `DATABASE_ECHO`: Echo SQL queries to console (default: False)
+- `CORS_ORIGINS`: Allowed CORS origins (default: ["*"] - all origins)
+- `CORS_CREDENTIALS`: Allow credentials in CORS (default: True)
+- `CORS_METHODS`: Allowed HTTP methods (default: ["*"] - all methods)
+- `CORS_HEADERS`: Allowed headers (default: ["*"] - all headers)
 
 ## Database Migrations
 
