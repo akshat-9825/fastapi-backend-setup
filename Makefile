@@ -1,4 +1,4 @@
-.PHONY: help install run dev test clean add remove shell env-info lint format check migrate-create migrate-up migrate-down migrate-history migrate-status
+.PHONY: help install run dev test clean add remove shell env-info lint format check migrate-create migrate-create-auto migrate-up migrate-down migrate-history migrate-status
 
 # Default target
 help:
@@ -14,7 +14,8 @@ help:
 	@echo "make lint         - Run Ruff linter"
 	@echo "make format       - Format code with Ruff"
 	@echo "make check        - Run linter and check formatting"
-	@echo "make migrate-create MSG=message - Create new migration"
+	@echo "make migrate-create MSG=message - Create empty migration (default)"
+	@echo "make migrate-create-auto MSG=message - Create with autogenerate"
 	@echo "make migrate-up   - Run all pending migrations"
 	@echo "make migrate-down - Downgrade by one migration"
 	@echo "make migrate-status - Show current and pending migrations"
@@ -83,14 +84,26 @@ check:
 	poetry run ruff check .
 	poetry run ruff format --check .
 
-# Create a new migration
+# Create an empty migration (default - works anytime!)
 migrate-create:
 ifndef MSG
 	@echo "Error: Please specify a message using MSG='your message'"
 	@echo "Example: make migrate-create MSG='create users table'"
 	@exit 1
 endif
-	@echo "Creating new migration: $(MSG)"
+	@echo "Creating empty migration: $(MSG)"
+	@echo "Edit the file to add your upgrade() and downgrade() logic."
+	poetry run alembic revision -m "$(MSG)"
+
+# Create migration with autogenerate (requires DB to be up to date)
+migrate-create-auto:
+ifndef MSG
+	@echo "Error: Please specify a message using MSG='your message'"
+	@echo "Example: make migrate-create-auto MSG='create users table'"
+	@exit 1
+endif
+	@echo "Creating migration with autogenerate: $(MSG)"
+	@echo "Note: Database must be up to date for this to work."
 	poetry run alembic revision --autogenerate -m "$(MSG)"
 
 # Run all pending migrations (upgrade to latest)
