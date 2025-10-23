@@ -1,4 +1,4 @@
-.PHONY: help install run dev test clean add remove shell env-info lint format check
+.PHONY: help install run dev test clean add remove shell env-info lint format check migrate-create migrate-up migrate-down migrate-history
 
 # Default target
 help:
@@ -14,6 +14,10 @@ help:
 	@echo "make lint         - Run Ruff linter"
 	@echo "make format       - Format code with Ruff"
 	@echo "make check        - Run linter and check formatting"
+	@echo "make migrate-create MSG=message - Create new migration"
+	@echo "make migrate-up   - Run all pending migrations"
+	@echo "make migrate-down - Downgrade by one migration"
+	@echo "make migrate-history - Show migration history"
 	@echo "make clean        - Remove cache and temporary files"
 	@echo "make test         - Run tests (when test suite is added)"
 
@@ -77,6 +81,32 @@ check:
 	@echo "Checking code quality..."
 	poetry run ruff check .
 	poetry run ruff format --check .
+
+# Create a new migration
+migrate-create:
+ifndef MSG
+	@echo "Error: Please specify a message using MSG='your message'"
+	@echo "Example: make migrate-create MSG='create users table'"
+	@exit 1
+endif
+	@echo "Creating new migration: $(MSG)"
+	poetry run alembic revision --autogenerate -m "$(MSG)"
+
+# Run all pending migrations (upgrade to latest)
+migrate-up:
+	@echo "Running migrations..."
+	poetry run alembic upgrade head
+
+# Downgrade by one migration
+migrate-down:
+	@echo "Downgrading last migration..."
+	poetry run alembic downgrade -1
+
+# Show migration history
+migrate-history:
+	@echo "Migration History:"
+	@echo "=================="
+	poetry run alembic history --verbose
 
 # Clean cache and temporary files
 clean:

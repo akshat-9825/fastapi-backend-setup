@@ -10,6 +10,8 @@ A production-ready FastAPI boilerplate with Poetry for dependency management.
 - 🚀 **Uvicorn** - Lightning-fast ASGI server
 - 🔧 **Configuration Management** - Environment-based configuration with pydantic-settings
 - 🎨 **Ruff** - Extremely fast Python linter and formatter (replaces Black, isort, flake8)
+- 🗄️ **SQLAlchemy + PostgreSQL** - Powerful ORM with async support
+- 🔄 **Alembic** - Database migration management
 
 ## Prerequisites
 
@@ -151,6 +153,10 @@ make env-info      # Show virtual environment information
 make lint          # Run Ruff linter
 make format        # Format code with Ruff
 make check         # Check linting and formatting (no changes)
+make migrate-create MSG="message" # Create new database migration
+make migrate-up    # Run all pending migrations
+make migrate-down  # Rollback last migration
+make migrate-history # Show migration history
 make clean         # Remove cache and temporary files
 make test          # Run tests (when added)
 ```
@@ -225,16 +231,40 @@ Configuration is managed through environment variables and the `app/config.py` f
 - `DEBUG`: Debug mode (default: True)
 - `HOST`: Server host (default: "0.0.0.0")
 - `PORT`: Server port (default: 8000)
+- `DATABASE_URL`: PostgreSQL connection string (required, no default)
+- `DATABASE_ECHO`: Echo SQL queries to console (default: False)
+
+## Database Migrations
+
+This project uses **Alembic** for database migrations.
+
+**Quick Start:**
+
+```bash
+# Create a new migration
+make migrate-create MSG="create users table"
+
+# Run migrations
+make migrate-up
+
+# Rollback
+make migrate-down
+
+# View history
+make migrate-history
+```
+
+See `.cursor/rules.mdc` for complete migration workflow and best practices.
 
 ## Expanding the Boilerplate
 
 This boilerplate is designed to be easily extended. Consider adding:
 
-- **Database integration** (SQLAlchemy, Tortoise ORM)
+- **Database entities** - Create your tables in `app/entities/`
 - **Authentication** (JWT, OAuth2)
 - **API routers** for organizing endpoints
 - **Middleware** (CORS, logging, error handling)
-- **Testing** (pytest, pytest-asyncio)
+- **Testing** (pytest)
 - **Docker** support
 - **CI/CD** pipelines
 
