@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "fastapi-backend-setup"
+version = "0.1.0"
+description = "FastAPI backend boilerplate"
+authors = ["akshat-9825 <akshat10dwivedi@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.119.1"
+uvicorn = {extras = ["standard"], version = "^0.38.0"}
+pydantic = "^2.12.3"
+pydantic-settings = "^2.11.0"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.14.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
