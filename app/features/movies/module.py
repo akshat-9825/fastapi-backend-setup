@@ -35,8 +35,12 @@ class MovieModule(Module):
 
     @provider
     @singleton
-    def provide_movie_service(self, repository: MovieRepository) -> MovieService:
-        return MovieServiceHandler(repository=repository)
+    def provide_movie_service(
+        self, repository: MovieRepository, show_repository: ShowRepository
+    ) -> MovieService:
+        return MovieServiceHandler(
+            repository=repository, show_repository=show_repository
+        )
 
     @provider
     @singleton
