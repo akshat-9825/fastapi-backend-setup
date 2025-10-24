@@ -49,15 +49,15 @@ class MovieServiceHandler(MovieService):
 
         # Get available seats for all shows in one query
         show_ids = [show.show_id for show in shows]
-        available_seats_map = self.show_repository.get_available_seats_bulk(show_ids)
+        available_seats_map = self.show_repository.get_available_seats_bulk(show_ids)  # type: ignore
 
         # Build response
         shows_with_seats = [
             ShowWithSeatsModel(
-                show_id=show.show_id,
-                available_seats=available_seats_map.get(show.show_id, []),
-                start_time=show.start_time,
-                end_time=show.end_time,
+                show_id=show.show_id,  # type: ignore
+                available_seats=available_seats_map.get(show.show_id, []),  # type: ignore
+                start_time=show.start_time,  # type: ignore
+                end_time=show.end_time,  # type: ignore
             )
             for show in shows
         ]

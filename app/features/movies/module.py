@@ -9,6 +9,10 @@ from app.features.movies.application.services.movie_service import MovieService
 from app.features.movies.application.services.movie_service_handler import (
     MovieServiceHandler,
 )
+from app.features.movies.application.services.seat_lock_service import SeatLockService
+from app.features.movies.application.services.seat_lock_service_handler import (
+    SeatLockServiceHandler,
+)
 from app.features.movies.application.services.show_service import ShowService
 from app.features.movies.application.services.show_service_handler import (
     ShowServiceHandler,
@@ -24,6 +28,10 @@ from app.features.movies.domain.repository.movie_repository_handler import (
 from app.features.movies.domain.repository.show_repository import ShowRepository
 from app.features.movies.domain.repository.show_repository_handler import (
     ShowRepositoryHandler,
+)
+from app.features.movies.domain.repository.visiting_repository import VisitingRepository
+from app.features.movies.domain.repository.visiting_repository_handler import (
+    VisitingRepositoryHandler,
 )
 
 
@@ -49,8 +57,12 @@ class MovieModule(Module):
 
     @provider
     @singleton
-    def provide_show_service(self, repository: ShowRepository) -> ShowService:
-        return ShowServiceHandler(repository=repository)
+    def provide_show_service(
+        self, repository: ShowRepository, seat_lock_service: SeatLockService
+    ) -> ShowService:
+        return ShowServiceHandler(
+            repository=repository, seat_lock_service=seat_lock_service
+        )
 
     @provider
     @singleton
@@ -63,5 +75,19 @@ class MovieModule(Module):
         self, repository: BookingRepository, show_repository: ShowRepository
     ) -> BookingService:
         return BookingServiceHandler(
+            repository=repository, show_repository=show_repository
+        )
+
+    @provider
+    @singleton
+    def provide_visiting_repository(self, db: DB) -> VisitingRepository:
+        return VisitingRepositoryHandler(db=db)
+
+    @provider
+    @singleton
+    def provide_seat_lock_service(
+        self, repository: VisitingRepository, show_repository: ShowRepository
+    ) -> SeatLockService:
+        return SeatLockServiceHandler(
             repository=repository, show_repository=show_repository
         )

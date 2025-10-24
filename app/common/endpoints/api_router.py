@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from app.features.movies.endpoints import (
     booking_controller,
     movie_controller,
+    seat_lock_controller,
     show_controller,
 )
 
@@ -34,4 +35,10 @@ api_router.include_router(
     booking_controller.router,
     prefix="/booking",
     tags=["bookings"],
+)
+
+api_router.include_router(
+    seat_lock_controller.router,
+    prefix="/seats",
+    tags=["seat-locking"],
 )
