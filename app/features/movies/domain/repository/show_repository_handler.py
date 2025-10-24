@@ -10,19 +10,22 @@ from app.features.movies.domain.repository.show_repository import ShowRepository
 class ShowRepositoryHandler(ShowRepository):
     db: DB
 
-    def get_available_seats(self, show_id: UUID) -> list[int]:
-        """Get available seats for a show (1-30 minus booked seats)"""
+    def get_booked_seats(self, show_id: UUID) -> set[int]:
+        """Get all booked seats for a show"""
         with self.db.session() as session:
-            # Get all booked seats for this show
             booked_seats_result = (
                 session.query(func.unnest(BookingEntity.seat).label("seat"))
                 .filter(BookingEntity.show_id == show_id)
                 .all()
             )
-            booked_seats = {row.seat for row in booked_seats_result}
+            return {row.seat for row in booked_seats_result}
 
-            # All seats are 1-30
-            all_seats = set(range(1, 31))
-            available_seats = all_seats - booked_seats
+    def get_available_seats(self, show_id: UUID) -> list[int]:
+        """Get available seats for a show (1-30 minus booked seats)"""
+        booked_seats = self.get_booked_seats(show_id)
 
-            return sorted(available_seats)
+        # All seats are 1-30
+        all_seats = set(range(1, 31))
+        available_seats = all_seats - booked_seats
+
+        return sorted(available_seats)

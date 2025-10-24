@@ -55,5 +55,9 @@ class MovieModule(Module):
 
     @provider
     @singleton
-    def provide_booking_service(self, repository: BookingRepository) -> BookingService:
-        return BookingServiceHandler(repository=repository)
+    def provide_booking_service(
+        self, repository: BookingRepository, show_repository: ShowRepository
+    ) -> BookingService:
+        return BookingServiceHandler(
+            repository=repository, show_repository=show_repository
+        )
