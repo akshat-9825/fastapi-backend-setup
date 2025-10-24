@@ -130,14 +130,6 @@ fastapi-backend-setup/
 └── README.md           # This file
 ```
 
-### Why `__init__.py`?
-
-The `app/__init__.py` file is essential as it makes the `app` directory a Python package. This allows you to:
-
-- Import modules using `from app.main import app`
-- Organize your code into a proper package structure
-- Enable relative imports between modules within the `app` package
-
 ## Development
 
 ### Makefile Commands
@@ -277,4 +269,4 @@ This boilerplate is designed to be easily extended. Consider adding:
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
