@@ -5,6 +5,8 @@ Import all feature routers here and register them with prefixes and tags.
 
 from fastapi import APIRouter
 
+from app.features.movies.endpoints import movie_controller
+
 # Import feature routers as you create them:
 # from app.features.users.endpoints import user_controller
 # from app.features.auth.endpoints import auth_controller
@@ -12,16 +14,8 @@ from fastapi import APIRouter
 
 api_router = APIRouter()
 
-# Register feature routers with their prefixes and tags
-# Example:
-# api_router.include_router(
-#     user_controller.router,
-#     prefix="/v1/users",
-#     tags=["users"]
-# )
-#
-# api_router.include_router(
-#     auth_controller.router,
-#     prefix="/v1/auth",
-#     tags=["authentication"]
-# )
+api_router.include_router(
+    movie_controller.api_router,
+    prefix="/movies",
+    tags=["movies"],
+)

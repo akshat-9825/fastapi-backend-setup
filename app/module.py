@@ -8,6 +8,7 @@ Add new features in app/features/{feature}/modules/module.py
 from injector import Injector
 
 from app.common.modules.db_module import DbModule
+from app.features.movies.module import MovieModule
 
 # Import feature modules here
 # Each feature should export its module in app/features/{feature}/modules/module.py
@@ -18,6 +19,7 @@ from app.common.modules.db_module import DbModule
 # List all modules to register
 FEATURE_MODULES = [
     DbModule(),
+    MovieModule(),
     # Add your feature modules here as you create them:
     # UserModule(),
     # ProductModule(),
