@@ -40,7 +40,7 @@ async def global_exception_handler(request: Request, exception: Exception):
 app.include_router(api_router, prefix="/api")
 
 
-def get_db_service() -> DB:
+def get_db() -> DB:
     """Get DB service from DI container."""
     return get_instance(DB)
 
@@ -70,7 +70,7 @@ def health_check():
 
 
 @app.get("/db/check", response_model=BaseResponseModel)
-def check_database(db: DB = Depends(get_db_service)):
+def check_database(db: DB = Depends(get_db)):
     """
     Check database connection.
     Simple endpoint to verify database is accessible.
