@@ -110,25 +110,128 @@ GET /
 
 Returns a welcome message.
 
+### Movies Feature (Example Implementation)
+
+The project includes a complete movies booking system as a reference implementation of clean architecture.
+
+#### Movies
+
+- `GET /api/v1/movies/fetch` - Get all movies
+- `GET /api/v1/movies/{movie_id}` - Get movie details with shows and available seats
+
+#### Shows
+
+- `GET /api/v1/show/{show_id}/available-seats` - Get available seats for a show (excludes booked and locked seats)
+
+#### Bookings
+
+- `GET /api/v1/booking/{booking_id}` - Get booking details (includes movie info)
+- `POST /api/v1/booking/create` - Create a new booking
+  ```json
+  {
+    "show_id": "uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "seat": [5, 6, 7]
+  }
+  ```
+
+#### Seat Locking (Temporary Reservations)
+
+- `POST /api/v1/seats/lock-seats` - Lock seats temporarily (prevents double-booking)
+  ```json
+  {
+    "show_id": "uuid",
+    "seat": [5, 6, 7],
+    "expires_in_minutes": 10
+  }
+  ```
+- `GET /api/v1/seats/{show_id}/locked-seats` - Get currently locked seats for a show
+
 ## Project Structure
+
+This project follows **Clean Architecture** with a **feature-based organization**:
 
 ```
 fastapi-backend-setup/
 ├── app/
-│   ├── __init__.py      # Makes app a Python package
-│   ├── main.py          # Application entry point
-│   └── config.py        # Configuration management
+│   ├── main.py                    # Application entry point
+│   ├── config.py                  # Configuration management
+│   ├── database.py                # Database setup and session management
+│   ├── module.py                  # Root dependency injection module
+│   ├── common/                    # Shared components
+│   │   ├── endpoints/
+│   │   │   └── api_router.py      # Main API router
+│   │   ├── models/
+│   │   │   ├── base_model.py      # Base Pydantic model for DI
+│   │   │   └── response.py        # Standard response models
+│   │   └── modules/
+│   │       └── db_module.py       # Database dependency injection
+│   ├── exceptions/
+│   │   └── handlers.py            # Global exception handlers
+│   └── features/                  # Feature-based modules
+│       └── movies/                # Example: Movies booking feature
+│           ├── domain/            # Business entities & data access
+│           │   ├── entities/      # SQLAlchemy ORM entities
+│           │   │   ├── movie_entity.py
+│           │   │   ├── show_entity.py
+│           │   │   ├── booking_entity.py
+│           │   │   └── visiting_entity.py
+│           │   └── repository/    # Data access interfaces & implementations
+│           │       ├── movie_repository.py
+│           │       ├── movie_repository_handler.py
+│           │       └── ...
+│           ├── application/       # Business logic
+│           │   ├── models/        # Request/Response DTOs
+│           │   │   ├── movie_response_model.py
+│           │   │   ├── booking_response_model.py
+│           │   │   └── ...
+│           │   └── services/      # Business logic interfaces & implementations
+│           │       ├── movie_service.py
+│           │       ├── movie_service_handler.py
+│           │       └── ...
+│           ├── endpoints/         # API controllers
+│           │   ├── movie_controller.py
+│           │   ├── booking_controller.py
+│           │   └── ...
+│           └── module.py          # Feature dependency injection
+├── alembic/
+│   ├── versions/                  # Database migrations
+│   │   ├── 0001_create_uuid_extension.py
+│   │   ├── 0002_create_movies_shows_bookings_tables.py
+│   │   └── 0003_create_visiting_table.py
+│   ├── env.py
+│   └── script.py.mako
 ├── .vscode/
-│   ├── launch.json      # VS Code debug configurations
-│   └── settings.json    # VS Code workspace settings
-├── pyproject.toml       # Poetry configuration
-├── poetry.lock          # Locked dependencies
-├── Makefile            # Common development commands
-├── .env                # Environment variables (git-ignored)
-├── .env.example        # Example environment variables
-├── .gitignore          # Git ignore rules
-└── README.md           # This file
+│   ├── launch.json                # VS Code debug configurations
+│   └── settings.json              # VS Code workspace settings
+├── pyproject.toml                 # Poetry configuration
+├── poetry.lock                    # Locked dependencies
+├── Makefile                       # Common development commands
+├── .env                           # Environment variables (git-ignored)
+├── .env.example                   # Example environment variables
+└── README.md                      # This file
 ```
+
+### Architecture Layers
+
+1. **Domain Layer** (`domain/`)
+
+   - Entities: Database models (SQLAlchemy)
+   - Repositories: Data access interfaces and implementations
+
+2. **Application Layer** (`application/`)
+
+   - Services: Business logic interfaces and implementations
+   - Models: Request/Response DTOs (Pydantic)
+
+3. **Presentation Layer** (`endpoints/`)
+
+   - Controllers: FastAPI route handlers
+
+4. **Dependency Injection** (`module.py`)
+   - Each feature has its own DI module
+   - Uses `injector` library with Pydantic's `BaseModel` for constructor injection
 
 ## Development
 
@@ -254,18 +357,6 @@ make migrate-history
 ```
 
 See `.cursor/rules.mdc` for complete migration workflow and best practices.
-
-## Expanding the Boilerplate
-
-This boilerplate is designed to be easily extended. Consider adding:
-
-- **Database entities** - Create your tables in `app/entities/`
-- **Authentication** (JWT, OAuth2)
-- **API routers** for organizing endpoints
-- **Middleware** (CORS, logging, error handling)
-- **Testing** (pytest)
-- **Docker** support
-- **CI/CD** pipelines
 
 ## License
 
